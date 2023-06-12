@@ -1,5 +1,14 @@
-This repository centers around my implemention of the `SimdComplex` class, which uses vector instrinsics to speed up element-wise computations on arrays of complex numbers. I use this class for many different types of fractal generations.
+# The intersection of parallel computing and fractals!
 
-The `SimdComplex` class uses SVML intrinsics that are currently only available by using the `icc` compiler, which can be installed [here](https://www.intel.com/content/www/us/en/developer/tools/oneapi/dpc-compiler.html).
+This repository contains my implementions of `mandelbrot` and `domain_color` which make use of the [Intel intrinsics](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html) available in C++. Essentially, it enables the element-wise operations on arrays to happen concurrently. This is especially helpful for fractal generation, which involves lots of such operations.
 
-Further, I would like to thank Sean Barrett for his [stb] image writing tool, which I use to export the fractals as .png images.
+Certain intrinsics used in this repository (the SVML intrinsics) are currently only compatible with the `icc` compiler, which can be installed [here](https://www.intel.com/content/www/us/en/developer/tools/oneapi/dpc-compiler.html).
+
+Currently, the tools support rendering the Mandelbrot set, as well as plotting domain colorings of functions $f: \mathbb{C} \to \mathbb{C}$. A personal favorite of mine is the function $e^{1/z}$, which has an essential singularity at $0$, as shown below.
+
+![](singularity.png)
+
+### Future Plans
+
+* Make primitive functions in `simd_domain_color.cpp` return memcopies of their arguments.
+* Possibly port everything over to Fortran.
