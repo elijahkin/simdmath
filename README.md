@@ -6,7 +6,9 @@ Certain intrinsics used in this repository (the SVML intrinsics) are currently o
 
 Currently, the tools support rendering the Mandelbrot set, as well as plotting domain colorings of functions $f: \mathbb{C} \to \mathbb{C}$. A personal favorite of mine is the function $e^{1/z}$, which has an essential singularity at $0$, as shown below.
 
-![](singularity.png)
+<p align="center">
+  <img src="singularity.png" width="50%" margin=auto>
+</p>
 
 ### Future Plans
 
