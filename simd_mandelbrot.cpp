@@ -1,80 +1,116 @@
 /*
     @author Elijah Kin
-    @version 1.0
-    @date 06/11/23
+    @version 1.1
+    @date 06/12/23
 */
 
-#include "simd_utils.h"
+#define BATCH_SIZE 8
+#define STB_IMAGE_WRITE_IMPLEMENTATION
 
-void simd_mandelbrot_iter(complex region, int iters) {
-    for (int i = 0; i < region.size; i += BATCH_SIZE) {
-        __m512d C_RE = _mm512_load_pd(&region.real[i]);
-        __m512d C_IM = _mm512_load_pd(&region.imag[i]);
+// #include <cmath>
+#include <immintrin.h>
+#include <iostream>
+#include "stb_image_write.h"
+
+double * simd_mandelbrot_iters(double * real, double * imag, int size, int max_iter) {
+    double * escape_iter = (double *) malloc(size * sizeof(double));
+    for (int i = 0; i < size; i += BATCH_SIZE) {
+        // Loading real and imaginary values from memory
+        __m512d C_RE = _mm512_load_pd(&real[i]);
+        __m512d C_IM = _mm512_load_pd(&imag[i]);
         __m512d Z_RE = _mm512_set1_pd(0);
         __m512d Z_IM = _mm512_set1_pd(0);
-        for (int itr = 0; itr < iters; itr++) {
-            // Applying the Mandelbrot iteration: z_{n+1} = (z_{n})^2 + c
-            __m512d Z_RE_NEW = _mm512_sub_pd(_mm512_mul_pd(Z_RE, Z_RE),
-                                             _mm512_mul_pd(Z_IM, Z_IM));
-                    Z_RE_NEW = _mm512_add_pd(Z_RE_NEW, C_RE);
+        // Defining constant used in the loop below
+        __m512d TWO         = _mm512_set1_pd(2);
+        __m512d FOUR        = _mm512_set1_pd(4);
+        __m512d MAX_ITER    = _mm512_set1_pd(max_iter);
+        __m512d ESCAPE_ITER = _mm512_set1_pd(max_iter);
+        for (int iter = 0; iter < max_iter; iter++) {
+            // Computing the new real values
+            __m512d Z_RE_SQUARED = _mm512_mul_pd(Z_RE, Z_RE);
+            __m512d Z_IM_SQUARED = _mm512_mul_pd(Z_IM, Z_IM);
+            __m512d Z_RE_NEW     = _mm512_sub_pd(Z_RE_SQUARED, Z_IM_SQUARED);
+                    Z_RE_NEW     = _mm512_add_pd(Z_RE_NEW, C_RE);
+            // Computing the new imaginary values
             __m512d Z_IM_NEW = _mm512_mul_pd(Z_RE, Z_IM);
-                    Z_IM_NEW = _mm512_mul_pd(_mm512_set1_pd(2), Z_IM_NEW);
+                    Z_IM_NEW = _mm512_mul_pd(TWO, Z_IM_NEW);
                     Z_IM_NEW = _mm512_add_pd(Z_IM_NEW, C_IM);
-
-            __m512d SABS = _mm512_add_pd(_mm512_mul_pd(Z_RE_NEW, Z_RE_NEW),
-                                         _mm512_mul_pd(Z_IM_NEW, Z_IM_NEW));
-            __m512d FOUR = _mm512_set1_pd(4);
-               auto MASK = _mm512_cmplt_pd_mask(SABS, FOUR);
-
-            // Update the point with its new value
+            // Checking which points escaped
+            __m512d  ABS_SQUARED = _mm512_add_pd(Z_RE_SQUARED, Z_IM_SQUARED);
+            __mmask8 ESCAPED     = _mm512_cmp_pd_mask(ABS_SQUARED, FOUR, _CMP_GE_OQ);
+            __m512d  THIS_ITER   = _mm512_set1_pd(iter);
+            __m512d  BLEND       = _mm512_mask_blend_pd(ESCAPED, MAX_ITER, THIS_ITER);
+                     ESCAPE_ITER = _mm512_min_pd(ESCAPE_ITER, BLEND);
+            // Setting escaped points to 0 to avoid overflow
+            Z_RE_NEW = _mm512_maskz_mov_pd(~ESCAPED, Z_RE_NEW);
+            Z_IM_NEW = _mm512_maskz_mov_pd(~ESCAPED, Z_IM_NEW);
+            C_RE     = _mm512_maskz_mov_pd(~ESCAPED, C_RE);
+            C_IM     = _mm512_maskz_mov_pd(~ESCAPED, C_IM);
+            // Updating the points with their new values
             Z_RE = Z_RE_NEW;
             Z_IM = Z_IM_NEW;
         }
-        _mm512_store_pd(&region.real[i], Z_RE);
-        _mm512_store_pd(&region.imag[i], Z_IM);
+        _mm512_store_pd(&escape_iter[i], ESCAPE_ITER);
     }
+    return escape_iter;
+}
+
+uint8_t * escape_iter_to_rgb(double * escape_iter, int max_iter, int size) {
+    uint8_t * rgb = (uint8_t *) malloc(3 * size);
+    for (int i = 0; i < size; i++) {
+        rgb[3 * i + 0] = 0;
+        rgb[3 * i + 1] = (uint8_t) (255 * (escape_iter[i] / max_iter)) + 1;
+        rgb[3 * i + 2] = 0;
+    }
+    return rgb;
+}
+
+char * make_filename(double center_real, double center_imag,
+                     double apothem, int max_iter, int n) {
+    char * filename = (char *) malloc(100 * sizeof(char));
+    sprintf(filename, "renders/mandelbrot (%.02f, %.02f, %.02f, %i, %i).png",
+            center_real, center_imag, apothem, max_iter, n);
+    return filename;
 }
 
 void mandelbrot(double center_real, double center_imag,
-                double apothem, int iters, int n, bool benchmark) {
+                double apothem, int max_iter, int n) {
     std::chrono::steady_clock::time_point start, end;
 
-    // Stage 1: Computing the escape iterations
     start = std::chrono::steady_clock::now();
-    complex region = complex_linspace(center_real, center_imag, apothem, n);
-    simd_mandelbrot_iter(region, iters);
-    end = std::chrono::steady_clock::now();
-    if (benchmark) {
-        std::cout << "Stage 1: " << std::chrono::duration <double, std::milli> (end - start).count() << " ms" << std::endl;
-    }
+    int size = n * n;
+    double * real = (double *) malloc(size * sizeof(double));
+    double * imag = (double *) malloc(size * sizeof(double));
 
-    // Stage 2: Converting to HSL
-    start = std::chrono::steady_clock::now();
-    double * hsl = complex_to_hsl(region);
-    end = std::chrono::steady_clock::now();
-    if (benchmark) {
-        std::cout << "Stage 2: " << std::chrono::duration <double, std::milli> (end - start).count() << " ms" << std::endl;
-    }
+    double min_real = center_real - apothem;
+    double max_imag = center_imag + apothem;
+    double step_size = 2 * apothem / (n - 1);
 
-    // Stage 3: Converting to RGB
-    start = std::chrono::steady_clock::now();
-    uint8_t * rgb = hsl_to_rgb(hsl, region.size);
-    end = std::chrono::steady_clock::now();
-    if (benchmark) {
-        std::cout << "Stage 3: " << std::chrono::duration <double, std::milli> (end - start).count() << " ms" << std::endl;
+    for (int i = 0; i < size; i++) {
+        real[i] = min_real + (i % n) * step_size;
+        imag[i] = max_imag - (i / n) * step_size;
     }
+    end = std::chrono::steady_clock::now();
+    std::cout << std::chrono::duration <double, std::milli> (end - start).count() << " ms" << std::endl;
 
-    // Stage 4: Saving the image
     start = std::chrono::steady_clock::now();
-    std::string filename = make_filename("mandelbrot", center_real, center_imag, apothem, iters, n);
-    save_png(filename.c_str(), rgb, n, n);
+    double * escape_iter = simd_mandelbrot_iters(real, imag, size, max_iter);
     end = std::chrono::steady_clock::now();
-    if (benchmark) {
-        std::cout << "Stage 4: " << std::chrono::duration <double, std::milli> (end - start).count() << " ms" << std::endl;
-    }
+    std::cout << std::chrono::duration <double, std::milli> (end - start).count() << " ms" << std::endl;
+
+    start = std::chrono::steady_clock::now();
+    uint8_t * rgb = escape_iter_to_rgb(escape_iter, max_iter, size);
+    end = std::chrono::steady_clock::now();
+    std::cout << std::chrono::duration <double, std::milli> (end - start).count() << " ms" << std::endl;
+
+    start = std::chrono::steady_clock::now();
+    char * filename = make_filename(center_real, center_imag, apothem, max_iter, n);
+    stbi_write_png(filename, n, n, 3, rgb, 0);
+    end = std::chrono::steady_clock::now();
+    std::cout << std::chrono::duration <double, std::milli> (end - start).count() << " ms" << std::endl;
 }
 
 int main() {
-    mandelbrot(-0.5, 0, 1.5, 100, 8192, true);
+    mandelbrot(-0.7, 0, 1.5, 200, 4096);
     return 0;
 }
