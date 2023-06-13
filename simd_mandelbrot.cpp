@@ -65,14 +65,6 @@ uint8_t * escape_iter_to_rgb(double * escape_iter, int max_iter, int size) {
     return rgb;
 }
 
-char * make_filename(double center_real, double center_imag,
-                     double apothem, int max_iter, int n) {
-    char * filename = (char *) malloc(100 * sizeof(char));
-    sprintf(filename, "renders/mandelbrot (%.02f, %.02f, %.02f, %i, %i).png",
-            center_real, center_imag, apothem, max_iter, n);
-    return filename;
-}
-
 void mandelbrot(double center_real, double center_imag,
                 double apothem, int max_iter, int n) {
     std::chrono::steady_clock::time_point start, end;
@@ -104,13 +96,15 @@ void mandelbrot(double center_real, double center_imag,
     std::cout << std::chrono::duration <double, std::milli> (end - start).count() << " ms" << std::endl;
 
     start = std::chrono::steady_clock::now();
-    char * filename = make_filename(center_real, center_imag, apothem, max_iter, n);
+    char * filename = (char *) malloc(100 * sizeof(char));
+    sprintf(filename, "renders/mandelbrot (%.02f, %.02f, %.02f, %i, %i).png",
+            center_real, center_imag, apothem, max_iter, n);
     stbi_write_png(filename, n, n, 3, rgb, 0);
     end = std::chrono::steady_clock::now();
     std::cout << std::chrono::duration <double, std::milli> (end - start).count() << " ms" << std::endl;
 }
 
 int main() {
-    mandelbrot(-0.7, 0, 1.5, 200, 4096);
+    mandelbrot(-0.6, 0, 1.5, 200, 4096);
     return 0;
 }
