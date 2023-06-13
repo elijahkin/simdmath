@@ -69,7 +69,7 @@ void mandelbrot_worker(double * real, double * imag, uint8_t * rgb, int max_iter
     free(escape_iter);
 }
 
-void save_png(const char* filename, uint8_t* rgb, int width, int height) {
+void save_png(uint8_t * rgb, int width, int height, char * filename) {
     FILE* fp = fopen(filename, "wb");
     png_structp png = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
     png_infop info = png_create_info_struct(png);
@@ -125,18 +125,20 @@ void mandelbrot(double center_real, double center_imag, double apothem, int max_
     }
     free(real);
     free(imag);
-    // Saving as a .png image
-    char * filename = (char *) malloc(100 * sizeof(char));
-    sprintf(filename, "renders/mandelbrot (%.02f, %.02f, %.02f, %i, %i).png",
-            center_real, center_imag, apothem, max_iter, n);
-    save_png(filename, rgb, n, n);
-    free(filename);
+    // Generating the name for the image file
+    char filename[100];
+    sprintf(filename, "renders/mandelbrot (%.02f, %.02f, %.02f, %i, %i, %i).png",
+            center_real, center_imag, apothem, max_iter, n, n);
+    // Saving the RGB data to the image
+    save_png(rgb, n, n, filename);
     free(rgb);
 }
 
 int main() {
     auto start = std::chrono::steady_clock::now();
-    mandelbrot(-0.6, 0, 1.5, 255, 8192);
+    // mandelbrot(-0.6, 0, 1.5, 200, 8192);
+    // mandelbrot(-0.77568377, 0.13646737, 0.0000001, 1000, 4096);
+    mandelbrot(0.001643721971153, -0.822467633298876, 0.00000000002, 1600, 4096);
     auto end = std::chrono::steady_clock::now();
     std::cout << (end - start).count() / 1000000 << " ms" << std::endl;
     return 0;
