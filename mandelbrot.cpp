@@ -14,7 +14,7 @@
 #include <thread>
 #include <vector>
 
-void simd_mandelbrot_iters(double * real, double * imag, double * escape_iter, int max_iter, int size) {
+void iterate_simd(double * real, double * imag, double * escape_iter, int max_iter, int size) {
     for (int i = 0; i < size; i += BATCH_SIZE) {
         // Loading real and imaginary values from memory
         __m512d C_RE = _mm512_load_pd(&real[i]);
@@ -58,8 +58,8 @@ void simd_mandelbrot_iters(double * real, double * imag, double * escape_iter, i
 void mandelbrot_worker(double * real, double * imag, uint8_t * rgb, int max_iter, int size) {
     // Allocating the memory this worker will need
     double * escape_iter = (double *) malloc(size * sizeof(double));
-    // Invoking the SIMD function to do iterations
-    simd_mandelbrot_iters(real, imag, escape_iter, max_iter, size);
+    // Invoking the function to do iterations with SIMD intrisincs
+    iterate_simd(real, imag, escape_iter, max_iter, size);
     // Calculating RGB values from escape iterations
     for (int i = 0; i < size; i++) {
         rgb[3 * i + 0] = 0;

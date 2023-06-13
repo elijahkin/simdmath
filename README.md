@@ -13,8 +13,8 @@ After doing all the math, I currently export to .png file, however, I eventually
 ### What I'm Working On
 
 * Trying to learn [OpenGL](https://learnopengl.com/Getting-started/OpenGL)
-* Possibly writing a port of `simd_mandelbrot.cpp` that uses `float` instead of `double`
-* Fixing `simd_domain_color.cpp` (Currently very buggy!) Maybe I should make the primitive functions return memcopies of their arguments?
+* Possibly writing a port of `mandelbrot.cpp` that uses `float` instead of `double`
+* `domain_color.cpp` is currently very buggy! Maybe I should make the primitive functions return memcopies of their arguments?
 
 ### References
 
