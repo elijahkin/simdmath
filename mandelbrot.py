@@ -3,6 +3,7 @@
   @version 1.0
   @date 06/12/23
 """
+
 from matplotlib import animation
 from matplotlib import cm
 import matplotlib.pyplot as plt
