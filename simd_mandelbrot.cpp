@@ -5,6 +5,7 @@
 */
 
 #define BATCH_SIZE 8
+#define NUM_THREADS 8
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 
 #include <immintrin.h>
@@ -13,8 +14,7 @@
 #include <thread>
 #include <vector>
 
-void simd_mandelbrot_iters(double * real, double * imag,
-                           double * escape_iter, int max_iter, int size) {
+void simd_mandelbrot_iters(double * real, double * imag, double * escape_iter, int max_iter, int size) {
     for (int i = 0; i < size; i += BATCH_SIZE) {
         // Loading real and imaginary values from memory
         __m512d C_RE = _mm512_load_pd(&real[i]);
@@ -56,7 +56,7 @@ void simd_mandelbrot_iters(double * real, double * imag,
 }
 
 void mandelbrot_worker(double * real, double * imag, uint8_t * rgb, int max_iter, int size) {
-    // Allocate memory this worker will need
+    // Allocating the memory this worker will need
     double * escape_iter = (double *) malloc(size * sizeof(double));
     // Invoking the SIMD function to do iterations
     simd_mandelbrot_iters(real, imag, escape_iter, max_iter, size);
@@ -68,28 +68,24 @@ void mandelbrot_worker(double * real, double * imag, uint8_t * rgb, int max_iter
     }
 }
 
-void mandelbrot(double center_real, double center_imag,
-                double apothem, int max_iter, int n, int num_threads) {
-    auto start = std::chrono::steady_clock::now();
+void mandelbrot(double center_real, double center_imag, double apothem, int max_iter, int n) {
     int size = n * n;
+    // Allocating the memory we will need
     double * real = (double *) malloc(size * sizeof(double));
     double * imag = (double *) malloc(size * sizeof(double));
-
+    uint8_t * rgb = (uint8_t *) malloc(3 * size);
+    // Initiliazing the real and imaginary values
     double min_real = center_real - apothem;
     double max_imag = center_imag + apothem;
     double step_size = 2 * apothem / (n - 1);
-
     for (int i = 0; i < size; i++) {
         real[i] = min_real + (i % n) * step_size;
         imag[i] = max_imag - (i / n) * step_size;
     }
-
-    uint8_t * rgb = (uint8_t *) malloc(3 * size);
-
     // Setting up the threads
-    int thread_size = size / num_threads;
+    int thread_size = size / NUM_THREADS;
     std::vector<std::thread> threads;
-    for (int i = 0; i < num_threads; i++) {
+    for (int i = 0; i < NUM_THREADS; i++) {
         threads.push_back(std::thread(mandelbrot_worker, &real[i*thread_size],
                     &imag[i*thread_size], &rgb[i*3*thread_size], max_iter, thread_size));
     }
@@ -104,16 +100,12 @@ void mandelbrot(double center_real, double center_imag,
     sprintf(filename, "renders/mandelbrot (%.02f, %.02f, %.02f, %i, %i).png",
             center_real, center_imag, apothem, max_iter, n);
     stbi_write_png(filename, n, n, 3, rgb, 0);
-    auto end = std::chrono::steady_clock::now();
-    std::cout << "Using " << num_threads << " Thread(s): " << std::chrono::duration <double, std::milli> (end - start).count() << " ms" << std::endl;
 }
 
 int main() {
-    mandelbrot(-0.6, 0, 1.5, 200, 4096, 1);
-    mandelbrot(-0.6, 0, 1.5, 200, 4096, 2);
-    mandelbrot(-0.6, 0, 1.5, 200, 4096, 4);
-    mandelbrot(-0.6, 0, 1.5, 200, 4096, 8);
-    mandelbrot(-0.6, 0, 1.5, 200, 4096, 16);
-    mandelbrot(-0.6, 0, 1.5, 200, 4096, 32);
+    auto start = std::chrono::steady_clock::now();
+    mandelbrot(-0.6, 0, 1.5, 300, 8192);
+    auto end = std::chrono::steady_clock::now();
+    std::cout << (end - start).count() / 1000000 << " ms" << std::endl;
     return 0;
 }
