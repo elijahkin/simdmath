@@ -8,11 +8,11 @@
 const int WIDTH = 2560;
 const int HEIGHT = 1600;
 const int NUM_THREADS = 8;
-const int BATCH_SIZE = 8;
+const int BATCH_PIXELS = 8;
 
 // Calculating derived constants
-const int SIZE = WIDTH * HEIGHT;
-const int THREAD_SIZE = SIZE / NUM_THREADS;
+const int PIXELS = WIDTH * HEIGHT;
+const int THREAD_PIXELS = PIXELS / NUM_THREADS;
 const double ASPECT_RATIO = (double) HEIGHT / WIDTH;
 
 // #include <GLFW/glfw3.h>
@@ -22,8 +22,8 @@ const double ASPECT_RATIO = (double) HEIGHT / WIDTH;
 #include <thread>
 #include <vector>
 
-void iterate_simd(double * real, double * imag, double * escape_iter, int max_iter) {
-    for (int i = 0; i < THREAD_SIZE; i += BATCH_SIZE) {
+void simd_iterate_thread(double * real, double * imag, double * escape_iter, int max_iter) {
+    for (int i = 0; i < THREAD_PIXELS; i += BATCH_PIXELS) {
         // Loading real and imaginary values from memory
         __m512d C_RE = _mm512_load_pd(&real[i]);
         __m512d C_IM = _mm512_load_pd(&imag[i]);
@@ -63,13 +63,13 @@ void iterate_simd(double * real, double * imag, double * escape_iter, int max_it
     }
 }
 
-void mandelbrot_worker(double * real, double * imag, uint8_t * rgb, int max_iter) {
-    // Allocating the memory this worker will need
-    double * escape_iter = (double *) malloc(THREAD_SIZE * sizeof(double));
-    // Invoking the function to do iterations with SIMD intrisincs
-    iterate_simd(real, imag, escape_iter, max_iter);
+void mandelbrot_thread(double * real, double * imag, uint8_t * rgb, int max_iter) {
+    // Allocating the memory this thread will need
+    double * escape_iter = (double *) malloc(THREAD_PIXELS * sizeof(double));
+    // Performing iterations using SIMD intrisincs on this thread
+    simd_iterate_thread(real, imag, escape_iter, max_iter);
     // Calculating RGB values from escape iterations
-    for (int i = 0; i < THREAD_SIZE; i++) {
+    for (int i = 0; i < THREAD_PIXELS; i++) {
         rgb[3 * i + 0] = 0;
         rgb[3 * i + 1] = (uint8_t) (255 * (escape_iter[i] / max_iter)) + 1;
         rgb[3 * i + 2] = 0;
@@ -106,9 +106,9 @@ void save_png(uint8_t * rgb, char * filename) {
 
 void mandelbrot(double center_real, double center_imag, double apothem, int max_iter) {
     // Allocating the memory we will need
-    double * real = (double *) malloc(SIZE * sizeof(double));
-    double * imag = (double *) malloc(SIZE * sizeof(double));
-    uint8_t * rgb = (uint8_t *) malloc(3 * SIZE);
+    double * real = (double *) malloc(PIXELS * sizeof(double));
+    double * imag = (double *) malloc(PIXELS * sizeof(double));
+    uint8_t * rgb = (uint8_t *) malloc(3 * PIXELS);
     // Computing values we need to initialize real and imag
     double min_real = center_real - apothem;
     double max_imag = center_imag + apothem * ASPECT_RATIO;
@@ -116,7 +116,7 @@ void mandelbrot(double center_real, double center_imag, double apothem, int max_
     double imag_step = 2 * apothem / (HEIGHT - 1) * ASPECT_RATIO;
     // Initializing the real and imag values
     int row, col;
-    for (int i = 0; i < SIZE; i++) {
+    for (int i = 0; i < PIXELS; i++) {
         col = i % WIDTH;
         row = i / WIDTH;
         real[i] = min_real + col * real_step;
@@ -125,8 +125,8 @@ void mandelbrot(double center_real, double center_imag, double apothem, int max_
     // Setting up the threads
     std::vector<std::thread> threads;
     for (int i = 0; i < NUM_THREADS; i++) {
-        threads.push_back(std::thread(mandelbrot_worker, &real[i * THREAD_SIZE],
-                            &imag[i * THREAD_SIZE], &rgb[i * 3 * THREAD_SIZE], max_iter));
+        threads.push_back(std::thread(mandelbrot_thread, &real[i * THREAD_PIXELS],
+                            &imag[i * THREAD_PIXELS], &rgb[i * 3 * THREAD_PIXELS], max_iter));
     }
     // Waiting for the threads to finish
     for (std::thread& thread : threads) {
