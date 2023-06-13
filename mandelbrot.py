@@ -38,10 +38,10 @@ def mandelbrot_iters(center, apothem, iters, n):
 
 def plot_mandelbrot(iters, n):
  """Plots the Mandelbrot set."""
- plt.imshow(mandelbrot_iters(-0.7, 1.5, iters, n), cmap='magma')
+ plt.imshow(mandelbrot_iters(-0.6, 1.5, iters, n), cmap='magma')
 
 start = time.time()
-plot_mandelbrot(50, 512)
+plot_mandelbrot(200, 8192)
 end = time.time()
 print(end - start)
 plt.show()

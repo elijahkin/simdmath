@@ -6,11 +6,11 @@
 
 #define BATCH_SIZE 8
 #define NUM_THREADS 8
-#define STB_IMAGE_WRITE_IMPLEMENTATION
 
+// #include <GLFW/glfw3.h>
 #include <immintrin.h>
 #include <iostream>
-#include "stb_image_write.h"
+#include <png.h>
 #include <thread>
 #include <vector>
 
@@ -66,6 +66,34 @@ void mandelbrot_worker(double * real, double * imag, uint8_t * rgb, int max_iter
         rgb[3 * i + 1] = (uint8_t) (255 * (escape_iter[i] / max_iter)) + 1;
         rgb[3 * i + 2] = 0;
     }
+    free(escape_iter);
+}
+
+void save_png(const char* filename, uint8_t* rgb, int width, int height) {
+    FILE* fp = fopen(filename, "wb");
+    png_structp png = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+    png_infop info = png_create_info_struct(png);
+    png_init_io(png, fp);
+    png_set_IHDR(
+        png,
+        info,
+        width,
+        height,
+        8,
+        PNG_COLOR_TYPE_RGB,
+        PNG_INTERLACE_NONE,
+        PNG_COMPRESSION_TYPE_DEFAULT,
+        PNG_FILTER_TYPE_DEFAULT
+    );
+    png_write_info(png, info);
+    png_bytep row_pointers [height];
+    for (int i = 0; i < height; i++) {
+        row_pointers[i] = &rgb[i * width * 3];
+    }
+    png_write_image(png, row_pointers);
+    png_write_end(png, NULL);
+    png_destroy_write_struct(&png, &info);
+    fclose(fp);
 }
 
 void mandelbrot(double center_real, double center_imag, double apothem, int max_iter, int n) {
@@ -95,16 +123,20 @@ void mandelbrot(double center_real, double center_imag, double apothem, int max_
             thread.join();
         }
     }
+    free(real);
+    free(imag);
     // Saving as a .png image
     char * filename = (char *) malloc(100 * sizeof(char));
     sprintf(filename, "renders/mandelbrot (%.02f, %.02f, %.02f, %i, %i).png",
             center_real, center_imag, apothem, max_iter, n);
-    stbi_write_png(filename, n, n, 3, rgb, 0);
+    save_png(filename, rgb, n, n);
+    free(filename);
+    free(rgb);
 }
 
 int main() {
     auto start = std::chrono::steady_clock::now();
-    mandelbrot(-0.6, 0, 1.5, 300, 8192);
+    mandelbrot(-0.6, 0, 1.5, 255, 8192);
     auto end = std::chrono::steady_clock::now();
     std::cout << (end - start).count() / 1000000 << " ms" << std::endl;
     return 0;

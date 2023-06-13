@@ -8,12 +8,11 @@ Currently, the tools support rendering the Mandelbrot set, as well as plotting d
   <img src="singularity.png" width="50%" margin=auto>
 </p>
 
-After doing all the math, I currently export to .png file using an [image writer](https://github.com/nothings/stb/blob/master/stb_image_write.h) written by Sean Barrett. However, I eventually plan to learn OpenGL and make the fractals zoomable, pannable fractals.
+After doing all the math, I currently export to .png file, however, I eventually plan to learn OpenGL and make zoomable, pannable fractals.
 
 ### What I'm Working On
 
-* [Learning OpenGL](https://learnopengl.com/Getting-started/OpenGL)
-* Possibly outsourcing the math to Fortran
+* Trying to learn [OpenGL](https://learnopengl.com/Getting-started/OpenGL)
 * Possibly writing a port of `simd_mandelbrot.cpp` that uses `float` instead of `double`
 * Fixing `simd_domain_color.cpp` (Currently very buggy!) Maybe I should make the primitive functions return memcopies of their arguments?
 
