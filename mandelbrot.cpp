@@ -63,9 +63,31 @@ void simd_iterate_thread(double * real, double * imag, double * escape_iter, int
     }
 }
 
+void iterate_thread(double * real, double * imag, double * escape_iter, int max_iter) {
+    double c_real, c_imag, z_real, z_imag;
+    double z_real_squared, z_imag_squared, z_real_tmp;
+    for (int i = 0; i < THREAD_PIXELS; i++) {
+        c_real = real[i];
+        c_imag = imag[i];
+        z_real = 0;
+        z_imag = 0;
+        for (int iter = 0; iter < max_iter; iter++) {
+            z_real_squared = z_real * z_real;
+            z_imag_squared = z_imag * z_imag;
+            if (z_real_squared + z_imag_squared > 4) {
+                escape_iter[i] = iter;
+                break;
+            }
+            z_real_tmp = z_real_squared - z_imag_squared + c_real;
+            z_imag = 2 * z_real * z_imag + c_imag;
+            z_real = z_real_tmp;
+        }
+    }
+}
+
 void mandelbrot_thread(double * real, double * imag, uint8_t * rgb, int max_iter) {
     // Allocating the memory this thread will need
-    double * escape_iter = (double *) malloc(THREAD_PIXELS * sizeof(double));
+    double * escape_iter = (double *) calloc(THREAD_PIXELS, sizeof(double));
     // Performing iterations using SIMD intrisincs on this thread
     simd_iterate_thread(real, imag, escape_iter, max_iter);
     // Calculating RGB values from escape iterations
@@ -147,9 +169,16 @@ void mandelbrot(double center_real, double center_imag, double apothem, int max_
 
 int main() {
     auto start = std::chrono::steady_clock::now();
+
+    // Standard Mandelbrot sanity check
     mandelbrot(-0.6, 0, 2, 200);
-    mandelbrot(-0.77568377, 0.13646737, 0.0000001, 1000);
+
+    // Plotting some Misiurewicz points
+    mandelbrot(-0.77568377, 0.13646737, 0.0000001, 800);
     mandelbrot(0.001643721971153, -0.822467633298876, 0.00000000002, 1600);
+    mandelbrot(0.026593792304386393, 0.8095285579867694, 0.00000000001, 200);
+    mandelbrot(0.4244, 0.200759, 0.00479616, 300);
+
     auto end = std::chrono::steady_clock::now();
     std::cout << (end - start).count() / 1000000 << " ms" << std::endl;
     return 0;

@@ -2,10 +2,10 @@
 
 This repository contains my implementions of `mandelbrot` and `domain_color` which make use of the [Intel intrinsics](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html) available in C++. Essentially, these enable element-wise operations on arrays to happen concurrently. This is especially helpful for fractal generation, which involves lots of such operations. We get further speed improvements on this front by utilizing multithreading.
 
-Currently, the tools support rendering the Mandelbrot set, as well as plotting domain colorings of functions $f: \mathbb{C} \to \mathbb{C}$. A personal favorite of mine is the function $e^{1/z}$, which has an essential singularity at $0$, as shown below.
+Currently, `mandelbrot.cpp` is capable of producing renders of the Mandelbrot set, such as the one below. `domain_color.cpp` is currently a work in progress.
 
 <p align="center">
-  <img src="singularity.png" width="50%" margin=auto>
+  <img src="mandelbrot_800_2560_1600 (-0.78, 0.14, 0.00).png" width="70%" margin=auto>
 </p>
 
 After doing all the math, I currently export to .png file, however, I eventually plan to learn OpenGL and make zoomable, pannable fractals.
@@ -13,7 +13,6 @@ After doing all the math, I currently export to .png file, however, I eventually
 ### What I'm Working On
 
 * Trying to learn [OpenGL](https://learnopengl.com/Getting-started/OpenGL)
-* Possibly writing a port of `mandelbrot.cpp` that uses `float` instead of `double`
 * `domain_color.cpp` is currently very buggy! Maybe I should make the primitive functions return memcopies of their arguments?
 
 ### References
