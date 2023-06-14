@@ -2,18 +2,19 @@
 
 This repository contains my implementions of `mandelbrot` and `domain_color` which make use of the [Intel intrinsics](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html) available in C++. Essentially, these enable element-wise operations on arrays to happen concurrently. This is especially helpful for fractal generation, which involves lots of such operations. We get further speed improvements on this front by utilizing multithreading.
 
-Currently, `mandelbrot.cpp` is capable of producing renders of the Mandelbrot set, such as the one below. `domain_color.cpp` is currently a work in progress.
+Currently, `mandelbrot.cpp` is capable of producing renders of the Mandelbrot set, such as the one below.
 
 <p align="center">
-  <img src="mandelbrot_800_2560_1600 (-0.78, 0.14, 0.00).png" width="70%" margin=auto>
+  <img src="images/misiurewicz.png" width="70%" margin=auto>
 </p>
 
 After doing all the math, I currently export to .png file, however, I eventually plan to learn OpenGL and make zoomable, pannable fractals.
 
 ### What I'm Working On
 
-* Trying to learn [OpenGL](https://learnopengl.com/Getting-started/OpenGL)
-* `domain_color.cpp` is currently very buggy! Maybe I should make the primitive functions return memcopies of their arguments?
+* Trying to learn [OpenGL](https://learnopengl.com/Getting-started/OpenGL). I would like to render the Mandelbrot set in a window and be able to pan and zoom.
+* Adding linear interpolation to `mandelbrot.cc` so the color bands are less visible.
+* Bugfixing `domain_color.cpp` which is very much a work in progress. Maybe I should make the primitive functions return memcopies of their arguments?
 
 ### References
 
