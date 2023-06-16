@@ -2,13 +2,13 @@
 
 This repository contains my implementions of `mandelbrot` and `domain_color` which make use of the [Intel intrinsics](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html) available in C++. Essentially, these enable element-wise operations on arrays to happen concurrently. This is especially helpful for fractal generation, which involves lots of such operations. We get further speed improvements on this front by utilizing multithreading.
 
-Currently, `mandelbrot.cpp` is capable of producing renders of the Mandelbrot set, such as the one below.
+With `mandelbrot.cpp`, we can produce renders of the Mandelbrot set, such as the one below.
 
 <p align="center">
   <img src="images/misiurewicz.png" width="70%" margin=auto>
 </p>
 
-After doing all the math, I currently export to .png file, however, I eventually plan to learn OpenGL and make zoomable, pannable fractals.
+I currently export to `.png` files after doing all the math, however, my end goal is to learn enough OpenGL to make zoomable, pannable fractals.
 
 ### What I'm Working On
 

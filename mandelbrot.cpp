@@ -4,6 +4,14 @@
     @date 06/13/23
 */
 
+#include <cmath>
+#include <GLUT/glut.h>
+#include <immintrin.h>
+#include <iostream>
+#include <png.h>
+#include <thread>
+#include <vector>
+
 // Defining the constants we will need
 const int WIDTH = 2560;
 const int HEIGHT = 1600;
@@ -15,20 +23,13 @@ const int PIXELS = WIDTH * HEIGHT;
 const int THREAD_PIXELS = PIXELS / NUM_THREADS;
 const double ASPECT_RATIO = (double) HEIGHT / WIDTH;
 
-// #include <GLFW/glfw3.h>
-#include <immintrin.h>
-#include <iostream>
-#include <png.h>
-#include <thread>
-#include <vector>
-
-void simd_iterate_thread(double * real, double * imag, double * escape_iter, int max_iter) {
+void iterate_thread_simd(double * real, double * imag, double * escape_iter, int max_iter) {
     for (int i = 0; i < THREAD_PIXELS; i += BATCH_PIXELS) {
         // Loading real and imaginary values from memory
-        __m512d C_RE = _mm512_load_pd(&real[i]);
-        __m512d C_IM = _mm512_load_pd(&imag[i]);
-        __m512d Z_RE = _mm512_set1_pd(0);
-        __m512d Z_IM = _mm512_set1_pd(0);
+        __m512d C_REAL = _mm512_load_pd(&real[i]);
+        __m512d C_IMAG = _mm512_load_pd(&imag[i]);
+        __m512d Z_REAL = _mm512_set1_pd(0);
+        __m512d Z_IMAG = _mm512_set1_pd(0);
         // Defining constant used in the loop below
         __m512d TWO         = _mm512_set1_pd(2);
         __m512d FOUR        = _mm512_set1_pd(4);
@@ -36,34 +37,34 @@ void simd_iterate_thread(double * real, double * imag, double * escape_iter, int
         __m512d ESCAPE_ITER = _mm512_set1_pd(max_iter);
         for (int iter = 0; iter < max_iter; iter++) {
             // Computing the new real values
-            __m512d Z_RE_SQUARED = _mm512_mul_pd(Z_RE, Z_RE);
-            __m512d Z_IM_SQUARED = _mm512_mul_pd(Z_IM, Z_IM);
-            __m512d Z_RE_NEW     = _mm512_sub_pd(Z_RE_SQUARED, Z_IM_SQUARED);
-                    Z_RE_NEW     = _mm512_add_pd(Z_RE_NEW, C_RE);
+            __m512d Z_REAL_SQ  = _mm512_mul_pd(Z_REAL, Z_REAL);
+            __m512d Z_IMAG_SQ  = _mm512_mul_pd(Z_IMAG, Z_IMAG);
+            __m512d Z_REAL_NEW = _mm512_sub_pd(Z_REAL_SQ, Z_IMAG_SQ);
+                    Z_REAL_NEW = _mm512_add_pd(Z_REAL_NEW, C_REAL);
             // Computing the new imaginary values
-            __m512d Z_IM_NEW = _mm512_mul_pd(Z_RE, Z_IM);
-                    Z_IM_NEW = _mm512_mul_pd(TWO, Z_IM_NEW);
-                    Z_IM_NEW = _mm512_add_pd(Z_IM_NEW, C_IM);
+            __m512d Z_IMAG_NEW = _mm512_mul_pd(Z_REAL, Z_IMAG);
+                    Z_IMAG_NEW = _mm512_mul_pd(TWO, Z_IMAG_NEW);
+                    Z_IMAG_NEW = _mm512_add_pd(Z_IMAG_NEW, C_IMAG);
             // Checking which points escaped
-            __m512d  ABS_SQUARED = _mm512_add_pd(Z_RE_SQUARED, Z_IM_SQUARED);
-            __mmask8 ESCAPED     = _mm512_cmp_pd_mask(ABS_SQUARED, FOUR, _CMP_GE_OQ);
+            __m512d  Z_ABS_SQ    = _mm512_add_pd(Z_REAL_SQ, Z_IMAG_SQ);
+            __mmask8 ESCAPED     = _mm512_cmp_pd_mask(Z_ABS_SQ, FOUR, _CMP_GE_OQ);
             __m512d  THIS_ITER   = _mm512_set1_pd(iter);
             __m512d  BLEND       = _mm512_mask_blend_pd(ESCAPED, MAX_ITER, THIS_ITER);
                      ESCAPE_ITER = _mm512_min_pd(ESCAPE_ITER, BLEND);
             // Setting escaped points to 0 to avoid overflow
-            Z_RE_NEW = _mm512_maskz_mov_pd(~ESCAPED, Z_RE_NEW);
-            Z_IM_NEW = _mm512_maskz_mov_pd(~ESCAPED, Z_IM_NEW);
-            C_RE     = _mm512_maskz_mov_pd(~ESCAPED, C_RE);
-            C_IM     = _mm512_maskz_mov_pd(~ESCAPED, C_IM);
+            Z_REAL_NEW = _mm512_maskz_mov_pd(~ESCAPED, Z_REAL_NEW);
+            Z_IMAG_NEW = _mm512_maskz_mov_pd(~ESCAPED, Z_IMAG_NEW);
+            C_REAL     = _mm512_maskz_mov_pd(~ESCAPED, C_REAL);
+            C_IMAG     = _mm512_maskz_mov_pd(~ESCAPED, C_IMAG);
             // Updating the points with their new values
-            Z_RE = Z_RE_NEW;
-            Z_IM = Z_IM_NEW;
+            Z_REAL = Z_REAL_NEW;
+            Z_IMAG = Z_IMAG_NEW;
         }
         _mm512_store_pd(&escape_iter[i], ESCAPE_ITER);
     }
 }
 
-void iterate_thread(double * real, double * imag, double * escape_iter, int max_iter) {
+void iterate_thread_naive(double * real, double * imag, double * escape_iter, int max_iter) {
     double c_real, c_imag, z_real, z_imag;
     double z_real_squared, z_imag_squared, z_real_tmp;
     for (int i = 0; i < THREAD_PIXELS; i++) {
@@ -89,12 +90,15 @@ void mandelbrot_thread(double * real, double * imag, uint8_t * rgb, int max_iter
     // Allocating the memory this thread will need
     double * escape_iter = (double *) calloc(THREAD_PIXELS, sizeof(double));
     // Performing iterations using SIMD intrisincs on this thread
-    simd_iterate_thread(real, imag, escape_iter, max_iter);
+    iterate_thread_simd(real, imag, escape_iter, max_iter);
     // Calculating RGB values from escape iterations
     for (int i = 0; i < THREAD_PIXELS; i++) {
         rgb[3 * i + 0] = 0;
         rgb[3 * i + 1] = (uint8_t) (255 * (escape_iter[i] / max_iter)) + 1;
         rgb[3 * i + 2] = 0;
+        // rgb[3 * i + 0] = (uint8_t) (fmodf(escape_iter[i], 32) * 8);
+        // rgb[3 * i + 1] = (uint8_t) (fmodf(escape_iter[i], 16) * 16);
+        // rgb[3 * i + 2] = (uint8_t) (fmodf(escape_iter[i], 8) * 32);
     }
     free(escape_iter);
 }
