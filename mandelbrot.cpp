@@ -1,7 +1,7 @@
 /*
     @author Elijah Kin
-    @version 1.3
-    @date 06/13/23
+    @version 1.4
+    @date 06/16/23
 */
 
 #include <GLUT/glut.h>
@@ -33,6 +33,7 @@ void iterate_thread_simd(double *real, double *imag, double *escape_iter,
     __m512d Z_REAL = _mm512_set1_pd(0);
     __m512d Z_IMAG = _mm512_set1_pd(0);
     // Defining constant used in the loop below
+    __m512d ZERO = _mm512_set1_pd(0);
     __m512d TWO = _mm512_set1_pd(2);
     __m512d FOUR = _mm512_set1_pd(4);
     __m512d MAX_ITER = _mm512_set1_pd(max_iter);
@@ -53,16 +54,15 @@ void iterate_thread_simd(double *real, double *imag, double *escape_iter,
       __m512d THIS_ITER = _mm512_set1_pd(iter);
       __m512d BLEND = _mm512_mask_blend_pd(ESCAPED, MAX_ITER, THIS_ITER);
       ESCAPE_ITER = _mm512_min_pd(ESCAPE_ITER, BLEND);
-      // Setting escaped points to 0 to avoid overflow
-      Z_REAL_NEW = _mm512_maskz_mov_pd(~ESCAPED, Z_REAL_NEW);
-      Z_IMAG_NEW = _mm512_maskz_mov_pd(~ESCAPED, Z_IMAG_NEW);
-      C_REAL = _mm512_maskz_mov_pd(~ESCAPED, C_REAL);
-      C_IMAG = _mm512_maskz_mov_pd(~ESCAPED, C_IMAG);
-      // Updating the points with their new values
-      Z_REAL = Z_REAL_NEW;
-      Z_IMAG = Z_IMAG_NEW;
+      // Updating points with their new values, keeping escaped points fixed
+      C_REAL = _mm512_mask_blend_pd(ESCAPED, C_REAL, Z_REAL);
+      C_IMAG = _mm512_mask_blend_pd(ESCAPED, C_IMAG, Z_IMAG);
+      Z_REAL = _mm512_mask_blend_pd(ESCAPED, Z_REAL_NEW, ZERO);
+      Z_IMAG = _mm512_mask_blend_pd(ESCAPED, Z_IMAG_NEW, ZERO);
     }
     _mm512_store_pd(&escape_iter[i], ESCAPE_ITER);
+    _mm512_store_pd(&real[i], C_REAL);
+    _mm512_store_pd(&imag[i], C_IMAG);
   }
 }
 
@@ -89,20 +89,116 @@ void iterate_thread_naive(double *real, double *imag, double *escape_iter,
   }
 }
 
+void hsl_to_rgb(double *hsl, uint8_t *rgb, int num_pixels) {
+  uint8_t sextant;
+  double h, s, l;
+  double chroma, x, m;
+  double r, g, b;
+
+  for (int i = 0; i < num_pixels; i++) {
+    h = hsl[3 * i + 0];
+    s = hsl[3 * i + 1];
+    l = hsl[3 * i + 2];
+
+    chroma = (1 - abs(2 * l - 1)) * s;
+    x = chroma * (1 - abs(fmod(h / 60, 2) - 1));
+    m = l - (chroma / 2);
+
+    sextant = int(h / 60);
+    switch (sextant) {
+      case 0:
+        r = chroma;
+        g = x;
+        b = 0;
+        break;
+      case 1:
+        r = x;
+        g = chroma;
+        b = 0;
+        break;
+      case 2:
+        r = 0;
+        g = chroma;
+        b = x;
+        break;
+      case 3:
+        r = 0;
+        g = x;
+        b = chroma;
+        break;
+      case 4:
+        r = x;
+        g = 0;
+        b = chroma;
+        break;
+      case 5:
+        r = chroma;
+        g = 0;
+        b = x;
+        break;
+      default:
+        r = g = b = 0;
+        break;
+    }
+    rgb[3 * i + 0] = (uint8_t)((r + m) * 255);
+    rgb[3 * i + 1] = (uint8_t)((g + m) * 255);
+    rgb[3 * i + 2] = (uint8_t)((b + m) * 255);
+  }
+}
+
+void create_palette(uint8_t *palette, int max_iter) {
+  double *hsl = (double *)malloc(3 * max_iter * sizeof(double));
+
+  for (int i = 0; i < max_iter; i++) {
+    hsl[3 * i + 0] = fmod(powf(((double)i / max_iter) * 360, 1.5), 360);
+    hsl[3 * i + 1] = 0.5;
+    hsl[3 * i + 2] = 0.5;  // (double) i / max_iter;
+  }
+
+  hsl_to_rgb(hsl, palette, max_iter);
+  free(hsl);
+}
+
+double lerp(double a, double b, double t) { return a + t * (b - a); }
+
+void color_lerp(double *real, double *imag, double *escape_iter, uint8_t *rgb,
+                uint8_t *palette, int max_iter) {
+  double log_zn, nu;
+  for (int i = 0; i < THREAD_PIXELS; i++) {
+    log_zn = log(real[i] * real[i] + imag[i] * imag[i]) / 2;
+    nu = log(log_zn / log(2)) / log(2);
+    escape_iter[i] += 1 - nu;
+  }
+  for (int i = 0; i < THREAD_PIXELS; i++) {
+    double iter = escape_iter[i];
+    if (iter < max_iter) {
+      rgb[3 * i + 0] =
+          (uint8_t)lerp(palette[3 * ((int)iter) + 0],
+                        palette[3 * ((int)iter + 1) + 0], fmod(iter, 1));
+      rgb[3 * i + 1] =
+          (uint8_t)lerp(palette[3 * ((int)iter) + 1],
+                        palette[3 * ((int)iter + 1) + 1], fmod(iter, 1));
+      rgb[3 * i + 2] =
+          (uint8_t)lerp(palette[3 * ((int)iter) + 2],
+                        palette[3 * ((int)iter + 1) + 2], fmod(iter, 1));
+    } else {
+      rgb[3 * i + 0] = 0;
+      rgb[3 * i + 1] = 0;
+      rgb[3 * i + 2] = 0;
+    }
+  }
+}
+
 void mandelbrot_thread(double *real, double *imag, uint8_t *rgb, int max_iter) {
   // Allocating the memory this thread will need
   double *escape_iter = (double *)calloc(THREAD_PIXELS, sizeof(double));
+  uint8_t *palette = (uint8_t *)malloc(3 * max_iter);
   // Performing iterations using SIMD intrisincs on this thread
   iterate_thread_simd(real, imag, escape_iter, max_iter);
-  // Calculating RGB values from escape iterations
-  for (int i = 0; i < THREAD_PIXELS; i++) {
-    rgb[3 * i + 0] = 0;
-    rgb[3 * i + 1] = (uint8_t)(255 * (escape_iter[i] / max_iter)) + 1;
-    rgb[3 * i + 2] = 0;
-    // rgb[3 * i + 0] = (uint8_t) (fmodf(escape_iter[i], 32) * 8);
-    // rgb[3 * i + 1] = (uint8_t) (fmodf(escape_iter[i], 16) * 16);
-    // rgb[3 * i + 2] = (uint8_t) (fmodf(escape_iter[i], 8) * 32);
-  }
+  // Create the palette that will be used to look up colors for the points
+  create_palette(palette, max_iter);
+  // Color the points according to their escape iteration
+  color_lerp(real, imag, escape_iter, rgb, palette, max_iter);
   free(escape_iter);
 }
 
@@ -173,7 +269,7 @@ int main() {
   auto start = std::chrono::steady_clock::now();
 
   // Standard Mandelbrot sanity check
-  mandelbrot(-0.6, 0, 2, 200);
+  mandelbrot(-0.6, 0, 2, 300);
 
   // Plotting some Misiurewicz points
   mandelbrot(-0.77568377, 0.13646737, 0.0000001, 800);
