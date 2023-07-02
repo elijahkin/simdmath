@@ -1,5 +1,6 @@
 CC = gcc
-CFLAGS = -std=c++17 -O2 -mavx512f -framework GLUT -framework OpenGL
+CFLAGS = -std=c++17 -O2 -mavx512f -lglfw -framework OpenGL
+
 
 all: mandelbrot
 

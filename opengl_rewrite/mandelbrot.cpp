@@ -1,21 +1,26 @@
 #define GL_SILENCE_DEPRECATION
 
-#include <GLUT/glut.h>
-#include <stdlib.h>
+#include <GLFW/glfw3.h>
+#include <cstdlib>
 #include <cmath>
 
-void reshape(int width, int height) {
+float zoomFactor = 1.0f; // Initial zoom factor
+
+void reshape(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    gluOrtho2D(0, width, 0, height);
+    float aspectRatio = static_cast<float>(width) / static_cast<float>(height);
+    float zoomedWidth = width / zoomFactor;
+    float zoomedHeight = height / zoomFactor;
+    glOrtho(0, zoomedWidth, 0, zoomedHeight, -1, 1);
 }
 
 void render() {
-    glClear(GL_COLOR_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT); // Clear color buffer
 
     // Calculate color values based on time
-    float time = glutGet(GLUT_ELAPSED_TIME) / 1000.0;  // Get elapsed time in seconds
+    float time = glfwGetTime();
     float red = sin(time * 2.0);  // Varying value between -1.0 and 1.0
     float green = sin(time * 0.7); // Varying value between -1.0 and 1.0
     float blue = sin(time * 1.3);  // Varying value between -1.0 and 1.0
@@ -23,35 +28,60 @@ void render() {
     // Draw a triangle with dynamically changing color
     glBegin(GL_TRIANGLES);
     glColor3f((red + 1.0) / 2.0, (green + 1.0) / 2.0, (blue + 1.0) / 2.0);
-    glVertex2f(100, 100);
-    glVertex2f(2460, 100);
-    glVertex2f(100, 1500);
+    glVertex2f(0, 0);
+    glVertex2f(1000, 0);
+    glVertex2f(0, 1000);
     glEnd();
 
     glFlush();
 }
 
-void keyboard(unsigned char key, int x, int y) {
-    if (key == 27) {  // esc
-        exit(0);
+void keyboard(GLFWwindow* window, int key, int scancode, int action, int mods) {
+    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
+        glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
 }
 
-int main(int argc, char** argv) {
-    glutInit(&argc, argv);
-    glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB);
+void scroll(GLFWwindow* window, double xoffset, double yoffset) {
+    if (yoffset > 0) {
+        zoomFactor *= 1.1f; // Increase zoom factor by 10%
+    } else {
+        zoomFactor *= 0.9f; // Decrease zoom factor by 10%
+    }
 
-	glutInitWindowSize(400,300);
-	glutCreateWindow("Mandelbrot");
-    // glutGameModeString("2560x1600:32");
-    // glutEnterGameMode();
+    int width, height;
+    glfwGetFramebufferSize(window, &width, &height);
+    reshape(window, width, height);
+}
 
-    glutDisplayFunc(render);
-    glutIdleFunc(render);
-    glutKeyboardFunc(keyboard);
-    glutReshapeFunc(reshape);
+int main() {
+    if (!glfwInit()) {
+        exit(EXIT_FAILURE);
+    }
 
-    glutMainLoop();
+    GLFWwindow* window = glfwCreateWindow(400, 300, "Mandelbrot", NULL, NULL);
+    if (!window) {
+        glfwTerminate();
+        exit(EXIT_FAILURE);
+    }
 
-    return 0;
+    glfwMakeContextCurrent(window);
+    glfwSetFramebufferSizeCallback(window, reshape);
+    glfwSetKeyCallback(window, keyboard);
+    glfwSetScrollCallback(window, scroll); // Set scroll callback
+
+    int width, height;
+    glfwGetFramebufferSize(window, &width, &height);
+    reshape(window, width, height);
+
+    while (!glfwWindowShouldClose(window)) {
+        render();
+        glfwSwapBuffers(window);
+        glfwPollEvents();
+    }
+
+    glfwDestroyWindow(window);
+    glfwTerminate();
+
+    return EXIT_SUCCESS;
 }
