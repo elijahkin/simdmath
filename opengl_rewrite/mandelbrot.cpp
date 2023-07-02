@@ -4,20 +4,10 @@
 #include <cstdlib>
 #include <cmath>
 
-float zoomFactor = 1.0f; // Initial zoom factor
-
-void reshape(GLFWwindow* window, int width, int height) {
-    glViewport(0, 0, width, height);
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    float aspectRatio = static_cast<float>(width) / static_cast<float>(height);
-    float zoomedWidth = width / zoomFactor;
-    float zoomedHeight = height / zoomFactor;
-    glOrtho(0, zoomedWidth, 0, zoomedHeight, -1, 1);
-}
+float zoomFactor = 1.0f;
 
 void render() {
-    glClear(GL_COLOR_BUFFER_BIT); // Clear color buffer
+    glClear(GL_COLOR_BUFFER_BIT);
 
     // Calculate color values based on time
     float time = glfwGetTime();
@@ -29,11 +19,29 @@ void render() {
     glBegin(GL_TRIANGLES);
     glColor3f((red + 1.0) / 2.0, (green + 1.0) / 2.0, (blue + 1.0) / 2.0);
     glVertex2f(0, 0);
-    glVertex2f(1000, 0);
-    glVertex2f(0, 1000);
+    glVertex2f(2560, 0);
+    glVertex2f(2560/2, 1600);
     glEnd();
 
     glFlush();
+}
+
+void reshape(GLFWwindow* window, int width, int height) {
+    glViewport(0, 0, width, height);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    float aspectRatio = static_cast<float>(width) / static_cast<float>(height);
+    float zoomedWidth = width / zoomFactor;
+    float zoomedHeight = height / zoomFactor;
+
+    float center_real = width / 2;
+    float center_imag = height / 2;
+
+    float apothem_real = zoomedWidth / 2;
+    float apothem_imag = zoomedHeight / 2;
+
+    glOrtho(center_real - apothem_real, center_real + apothem_real,
+            center_imag - apothem_imag, center_imag + apothem_imag, -1, 1);
 }
 
 void keyboard(GLFWwindow* window, int key, int scancode, int action, int mods) {
@@ -68,7 +76,7 @@ int main() {
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, reshape);
     glfwSetKeyCallback(window, keyboard);
-    glfwSetScrollCallback(window, scroll); // Set scroll callback
+    glfwSetScrollCallback(window, scroll);
 
     int width, height;
     glfwGetFramebufferSize(window, &width, &height);
