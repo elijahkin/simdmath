@@ -1,5 +1,5 @@
-CC = icc
-CFLAGS = -std=c++17 -O2 -mavx512f -framework GLUT -framework OpenGL -diag-disable=10441 -L/usr/local/Cellar/libpng/1.6.39/lib -lpng16
+CC = g++
+CFLAGS = -std=c++11 -O2 -mavx512f -L/usr/local/Cellar/libpng/1.6.39/lib -lpng16
 
 all: mandelbrot
 

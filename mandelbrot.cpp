@@ -1,10 +1,9 @@
 /*
     @author Elijah Kin
-    @version 1.4
-    @date 06/16/23
+    @version 1.5
+    @date 08/12/23
 */
 
-#include <GLUT/glut.h>
 #include <immintrin.h>
 #include <png.h>
 
@@ -30,26 +29,23 @@ void iterate_thread_simd(double *real, double *imag, double *escape_iter,
     // Loading real and imaginary values from memory
     __m512d C_REAL = _mm512_load_pd(&real[i]);
     __m512d C_IMAG = _mm512_load_pd(&imag[i]);
-    __m512d Z_REAL = _mm512_set1_pd(0);
-    __m512d Z_IMAG = _mm512_set1_pd(0);
+    __m512d Z_REAL = _mm512_setzero_pd();
+    __m512d Z_IMAG = _mm512_setzero_pd();
     // Defining constant used in the loop below
-    __m512d ZERO = _mm512_set1_pd(0);
+    __m512d ZERO = _mm512_setzero_pd();
     __m512d TWO = _mm512_set1_pd(2);
     __m512d FOUR = _mm512_set1_pd(4);
     __m512d MAX_ITER = _mm512_set1_pd(max_iter);
     __m512d ESCAPE_ITER = _mm512_set1_pd(max_iter);
     for (int iter = 0; iter < max_iter; iter++) {
       // Computing the new real values
-      __m512d Z_REAL_SQ = _mm512_mul_pd(Z_REAL, Z_REAL);
-      __m512d Z_IMAG_SQ = _mm512_mul_pd(Z_IMAG, Z_IMAG);
-      __m512d Z_REAL_NEW = _mm512_sub_pd(Z_REAL_SQ, Z_IMAG_SQ);
-      Z_REAL_NEW = _mm512_add_pd(Z_REAL_NEW, C_REAL);
+      __m512d Z_REAL_NEW = _mm512_fmsub_pd(
+          Z_REAL, Z_REAL, _mm512_fmsub_pd(Z_IMAG, Z_IMAG, C_REAL));
       // Computing the new imaginary values
-      __m512d Z_IMAG_NEW = _mm512_mul_pd(Z_REAL, Z_IMAG);
-      Z_IMAG_NEW = _mm512_mul_pd(TWO, Z_IMAG_NEW);
-      Z_IMAG_NEW = _mm512_add_pd(Z_IMAG_NEW, C_IMAG);
+      __m512d Z_IMAG_NEW = _mm512_fmadd_pd(
+          Z_REAL, Z_IMAG, _mm512_fmadd_pd(Z_REAL, Z_IMAG, C_IMAG));
       // Checking which points escaped
-      __m512d Z_ABS_SQ = _mm512_add_pd(Z_REAL_SQ, Z_IMAG_SQ);
+      __m512d Z_ABS_SQ = _mm512_fmadd_pd(Z_REAL, Z_REAL, _mm512_mul_pd(Z_IMAG, Z_IMAG));
       __mmask8 ESCAPED = _mm512_cmp_pd_mask(Z_ABS_SQ, FOUR, _CMP_GE_OQ);
       __m512d THIS_ITER = _mm512_set1_pd(iter);
       __m512d BLEND = _mm512_mask_blend_pd(ESCAPED, MAX_ITER, THIS_ITER);
@@ -200,6 +196,7 @@ void mandelbrot_thread(double *real, double *imag, uint8_t *rgb, int max_iter) {
   // Color the points according to their escape iteration
   color_lerp(real, imag, escape_iter, rgb, palette, max_iter);
   free(escape_iter);
+  free(palette);
 }
 
 void save_png(uint8_t *rgb, char *filename) {
@@ -227,7 +224,7 @@ void mandelbrot(double center_real, double center_imag, double apothem,
   // Allocating the memory we will need
   double *real = (double *)malloc(PIXELS * sizeof(double));
   double *imag = (double *)malloc(PIXELS * sizeof(double));
-  uint8_t *rgb = (uint8_t *)malloc(3 * PIXELS);
+  uint8_t *rgb = (uint8_t *)calloc(3 * PIXELS, sizeof(uint8_t));
   // Computing values we need to initialize real and imag
   double min_real = center_real - apothem;
   double max_imag = center_imag + apothem * ASPECT_RATIO;
@@ -242,6 +239,7 @@ void mandelbrot(double center_real, double center_imag, double apothem,
     imag[i] = max_imag - row * imag_step;
   }
   // Setting up the threads
+  auto start = std::chrono::steady_clock::now();
   std::vector<std::thread> threads;
   for (int i = 0; i < NUM_THREADS; i++) {
     threads.push_back(std::thread(mandelbrot_thread, &real[i * THREAD_PIXELS],
@@ -254,6 +252,8 @@ void mandelbrot(double center_real, double center_imag, double apothem,
       thread.join();
     }
   }
+  auto end = std::chrono::steady_clock::now();
+  std::cout << (end - start).count() / 1000000 << " ms" << std::endl;
   free(real);
   free(imag);
   // Generating the name for the image file
@@ -266,18 +266,19 @@ void mandelbrot(double center_real, double center_imag, double apothem,
 }
 
 int main() {
-  auto start = std::chrono::steady_clock::now();
-
   // Standard Mandelbrot sanity check
   mandelbrot(-0.6, 0, 2, 300);
 
   // Plotting some Misiurewicz points
-  mandelbrot(-0.77568377, 0.13646737, 0.0000001, 800);
+  mandelbrot(-0.77568377, 0.13646737, 0.0000001, 1000);
   mandelbrot(0.001643721971153, -0.822467633298876, 0.00000000002, 1600);
   mandelbrot(0.026593792304386393, 0.8095285579867694, 0.00000000001, 200);
   mandelbrot(0.4244, 0.200759, 0.00479616, 300);
 
-  auto end = std::chrono::steady_clock::now();
-  std::cout << (end - start).count() / 1000000 << " ms" << std::endl;
+  // double apothem = 3;
+  // for (int i = 0; i < 16080; i++) {
+  //   mandelbrot(-0.77568377, 0.13646737, apothem, 800, i);
+  //   apothem *= 0.998929882193;
+  // }
   return 0;
 }
